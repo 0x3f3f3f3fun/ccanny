@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.py": "python",
+        "stb_image.h": "c",
+        "memory.h": "c",
+        "error.h": "c"
+    }
+}

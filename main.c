@@ -4,12 +4,19 @@
 int main() {
     printf("hello ccanny!\n");
     image_t img;
-    const char *src = "./data/girl.png";
-    if (load_image(src, &img, 3) == 0) {
-        printf("load image from %s successfully\n", src);
+    
+    const char *src = "./data/girl.jpg";
+    if (load_image(src, &img, RGB)) {
+        printf("load image from %s\n", src);
     }
+    
     print_image(&img);
-    write_image(&img, "./data/girl_write.jpg");
+
+    const char *dst = "./data/girl_write.jpg";
+    if (write_image(&img, dst)) {
+        printf("write image to %s\n", dst);
+    }
+
     destroy_image(&img);
     return 0;
 }

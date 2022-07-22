@@ -8,9 +8,16 @@ typedef struct {
     int c; // number of channels
 } image_t;
 
-int load_image(const char *path, image_t *img, int req_comp);
-int write_image(image_t *img, const char *path);
+typedef enum {
+    GRAY,
+    GRAYA,
+    RGB,
+    RGBA
+} image_type_t;
+
+int load_image(const char *path, image_t *img, image_type_t img_type);
+int write_image(const image_t *img, const char *path);
 void destroy_image(image_t *img);
-void print_image(image_t *img);
+void print_image(const image_t *img);
 
 #endif // CCANNY_INCLUDE_IAMGE_H

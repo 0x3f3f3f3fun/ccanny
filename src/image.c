@@ -7,46 +7,37 @@
 #include "stb/stb_image_write.h"
 #include <memory.h>
 
-int load_image(const char *path, image_t *img, int req_comp) {
-    int h, w, c, parsed_c;
+const image_type_t channel_to_type[] = {0x3f3f3f3f, GRAY, GRAYA, RGB, RGBA};
+
+int load_image(const char *path, image_t *img, image_type_t img_type) {
+    int h, w, c;
     // load image, memory order is HWC (RGB)
     // see stb_image.h: 170
-    unsigned char *buffer = stbi_load(path, &w, &h, &parsed_c, 0);
+    unsigned char *buffer = stbi_load(path, &w, &h, &c, 0);
     if (!buffer) {
-        ERROR("failed to load image from %s, %s\n", path, stbi_failure_reason());
-        img->h = 0; img->w = 0; img->c = 0;
-        img->data = NULL;
-        return -1;
+        ERROR("file not exist <%s>", path);
+        return 0;
     }
-    // validate number of channels
-    if (parsed_c < req_comp) {
-        WARNING("number of channels of image from %s is %d, less than %d", 
-                path, parsed_c, req_comp);
-        c = parsed_c;
-    } else if (req_comp < parsed_c) {
-        WARNING("number of channels of image from %s is %d, greater than %d", 
-                path, parsed_c, req_comp);
-        c = req_comp;
-    } else { // parsed_c = req_comp
-        c = parsed_c;
+    // validate image type
+    image_type_t type = channel_to_type[c];
+    if (type != img_type) {
+        ERROR("error image type");
+        free(buffer);
+        return 0;
     }
     // allocate memory
     float *data = (float*)malloc(sizeof(float) * h * w * c);
     // copy each pixel and convert from unsigned char to float
-    for (int i = 0; i < h * w; i++) {
-        for (int j = 0; j < c; j++) {
-            data[i * c + j] = (float)buffer[i * parsed_c + j];
-        }
+    for (int i = 0; i < h * w * c; i++) {
+        data[i] = (float)buffer[i];
     }
-    // free buffer
-    stbi_image_free(buffer);
-    // initialize image
+    free(buffer);
     img->h = h; img->w = w; img->c = c;
     img->data = data;
-    return 0;
+    return 1;
 }
 
-int write_image(image_t *img, const char *path) {
+int write_image(const image_t *img, const char *path) {
     int h = img->h, w = img->w, c = img->c;
     float *data = img->data;
 
@@ -54,14 +45,14 @@ int write_image(image_t *img, const char *path) {
     for (int i = 0; i < h * w * c; i++) {
         buffer[i] = (unsigned char)data[i];
     }
-    int ret = stbi_write_jpg(path, w, h, c, buffer, 0);
+    int success = stbi_write_jpg(path, w, h, c, buffer, 0);
     free(buffer);
 
-    if (!ret) {
+    if (!success) {
         ERROR("failed to write image to %s", path);
-        return -1;
-    } else {
         return 0;
+    } else {
+        return 1;
     }
 }
 
@@ -69,7 +60,7 @@ void destroy_image(image_t *img) {
     free(img->data);
 }
 
-void print_image(image_t *img) {
+void print_image(const image_t *img) {
     for (int i = 0; i < 20; i++) {
         printf("- ");
     }
