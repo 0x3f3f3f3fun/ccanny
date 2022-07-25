@@ -7,8 +7,7 @@
                 "/usr/local/include/opencv4"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/gcc",
-            "cStandard": "c11",
+            "compilerPath": "/usr/bin/g++",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "linux-gcc-x64"
         }

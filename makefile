@@ -17,24 +17,25 @@ MACRO=
 EXEC=main
 
 # compiler
-CC=gcc
+CC=g++
 # compiler option
-CFLAGS=-Ofast -Wall -Wfatal-errors -Wno-unused-result -Wno-unknown-pragmas -fopenmp
+CFLAGS=-O3 -Wall -Wfatal-errors -Wno-unused-result -Wno-unknown-pragmas -fopenmp
 
+# OBJ=main.o image.o
 OBJ=main.o image.o
 ifeq ($(TEST), 1)
 	OBJ += test.o
 endif
 
 OBJS = $(addprefix $(OBJDIR), $(OBJ))
-DEPS = $(wildcard include/*.h) makefile
+DEPS = $(wildcard include/*.h*) makefile
 
 all: $(OBJDIR) $(EXEC)
 
 $(EXEC): $(OBJS)
 	$(CC) $(HEADER) $(LIB) $(MACRO) $(CFLAGS) $^ -o $@ $(LINK)
 
-$(OBJDIR)%.o: %.c $(DEPS)
+$(OBJDIR)%.o: %.cc $(DEPS)
 	$(CC) $(HEADER) $(LIB) $(MACRO) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR):
