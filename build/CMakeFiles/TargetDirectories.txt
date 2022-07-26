@@ -1,0 +1,3 @@
+/home/nobug/Documents/oblivion/ccanny/build/CMakeFiles/rebuild_cache.dir
+/home/nobug/Documents/oblivion/ccanny/build/CMakeFiles/ccanny.dir
+/home/nobug/Documents/oblivion/ccanny/build/CMakeFiles/edit_cache.dir

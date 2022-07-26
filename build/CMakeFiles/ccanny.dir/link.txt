@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -Wall -Wfatal-errors -Wno-unused-result                     -Wno-unknown-pragmas -fopenmp -O3 -DNDEBUG CMakeFiles/ccanny.dir/main.cc.o CMakeFiles/ccanny.dir/src/blur.cc.o CMakeFiles/ccanny.dir/src/image/basic.cc.o CMakeFiles/ccanny.dir/src/image/io.cc.o -o ccanny 
