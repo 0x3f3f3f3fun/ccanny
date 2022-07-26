@@ -1,18 +1,25 @@
 #include <iostream>
+#include <unordered_map>
+#include <functional>
 #include "image.hpp"
 #include "vector.hpp"
 
 using namespace std;
 using namespace ccanny;
 
+void header(const string& s) {
+    static const string line = "- - - - - - - - - -- - -";
+    cout << line << " " << s << " " << line << endl;
+}
+
 void test_read_write() {
-    const string src = "./data/girl.jpg";
+    const string src = "../data/girl.jpg";
     Image img = imread(src);
     cout << "load image from " << src << endl;
     
     img.show();
 
-    const string dst = "./data/girl_write.jpg";
+    const string dst = "../data/girl_write.jpg";
     if (imwrite(img, dst)) {
         cout << "write image to " << dst << endl;
     }
@@ -37,9 +44,18 @@ void test_vector() {
          << "v7 = " << v7 << endl;
 }
 
+typedef function<void()> test_func;
+
+unordered_map<string, test_func> tests = {
+    {"read and write", test_read_write},
+    {"vector", test_vector}
+};
+
 int main() {
     cout << "hello canny!" << endl;
-    // test_vector();
-    test_read_write();
+    for (const auto& item : tests) {
+        header(item.first);
+        item.second();
+    }
     return 0;
 }

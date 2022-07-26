@@ -4,6 +4,7 @@
 #include "basic_types.h"
 #include <iostream>
 #include <string>
+#include <cstring>
 
 namespace ccanny {
 
@@ -34,15 +35,11 @@ public:
     // Why you need to consider so much ?
     // -v-
     Vector(const Vector_& other) {
-        for (size_t i = 0; i < Length; i++) {
-            data_[i] = other.data_[i];
-        }
+        std::memcpy(data_, other.data_, sizeof(float_t) * Length);
     }
 
     Vector_& operator=(const Vector_& other) {
-        for (size_t i = 0; i < Length; i++) {
-            data_[i] = other.data_[i];
-        }
+        std::memcpy(data_, other.data_, sizeof(float_t) * Length);
         return *this;
     }
 
@@ -81,7 +78,9 @@ public:
         return res;
     }
 
-    // TODO: why I can't add const to this function ?
+    // why I can't add const to this function ?
+    // 因为data位于结构体内部，而不在堆上，所以加上const之后返回值的引用也必须是const
+    // 而如果data的内存在堆上，就不会有这个问题了，此时const只保证指针不变，不保证堆的内容不变
     // float_t& operator[](const size_t i) const {
     float_t& operator[](const size_t i) {
         return data_[i];

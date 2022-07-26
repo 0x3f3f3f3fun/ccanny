@@ -6,13 +6,15 @@
 
 namespace ccanny {
 
-typedef Vector<3> Pixel;
-typedef float_t GrayPixel;
+typedef Vector<3> Vec3f;
+typedef Vector<1> Vec1f;
 
 class Image {
 private:
+    size_t height_;
+    size_t width_;
+    size_t channels_;
     float_t* data_;
-    size_t height_, width_, channels_;
 
 public:
     Image() = default;
