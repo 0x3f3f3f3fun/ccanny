@@ -8,6 +8,7 @@
 #include "stb/stb_image_write.h"
 #include <omp.h>
 
+typedef unsigned char uchar_t;
 
 ccanny::Image ccanny::imread(const std::string& path) {
     // load image, memory order is HWC (RGB)
@@ -28,15 +29,15 @@ ccanny::Image ccanny::imread(const std::string& path) {
     Image res(h, w, c);
     if (c == 1) {
         #pragma omp parallel for
-        for (size_t i = 0; i < h * w; i++) {
-            res.at<Vec1f>(i / w, i % w)[0] = (float_t)buffer[i];
+        for (int i = 0; i < h * w; i++) {
+            res.at<Vec1f>(i / w, i % w)[0] = (float)buffer[i];
         }
     } else { // c == 3
         #pragma omp parallel for
-        for (size_t i = 0; i < h * w; i++) {
-            res.at<Vec3f>(i / w, i % w)[0] = (float_t)buffer[i * 3 + 0];
-            res.at<Vec3f>(i / w, i % w)[1] = (float_t)buffer[i * 3 + 1];
-            res.at<Vec3f>(i / w, i % w)[2] = (float_t)buffer[i * 3 + 2];
+        for (int i = 0; i < h * w; i++) {
+            res.at<Vec3f>(i / w, i % w)[0] = (float)buffer[i * 3 + 0];
+            res.at<Vec3f>(i / w, i % w)[1] = (float)buffer[i * 3 + 1];
+            res.at<Vec3f>(i / w, i % w)[2] = (float)buffer[i * 3 + 2];
         }
     }
     free(buffer);
@@ -45,13 +46,13 @@ ccanny::Image ccanny::imread(const std::string& path) {
 }
 
 bool ccanny::imwrite(const Image& src, const std::string& path) {
-    size_t h = src.height(), w = src.width(), c = src.channels();
-    size_t n = h * w * c;
-    float_t* data = src.data();
+    int h = src.height(), w = src.width(), c = src.channels();
+    int n = h * w * c;
+    float* data = src.data();
 
     uchar_t* buffer = new uchar_t[n];
     #pragma omp parallel for
-    for (size_t i = 0; i < n; i++) {
+    for (int i = 0; i < n; i++) {
         buffer[i] = (uchar_t)data[i];
     }
 

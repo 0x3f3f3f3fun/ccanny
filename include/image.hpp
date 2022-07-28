@@ -11,15 +11,15 @@ typedef Vector<1> Vec1f;
 
 class Image {
 private:
-    size_t height_;
-    size_t width_;
-    size_t channels_;
-    float_t* data_;
+    int height_;
+    int width_;
+    int channels_;
+    float* data_;
 
 public:
     Image() = default;
-    Image(size_t h, size_t w, size_t c);
-    Image(size_t h, size_t w, size_t c, float_t x);
+    Image(int h, int w, int c);
+    Image(int h, int w, int c, float x);
 
     Image(const Image& other);
     Image(Image&& other);
@@ -31,18 +31,18 @@ public:
 
     void show() const;
     bool empty() const;
-    float_t* const data() const { return data_; };
-    size_t height() const { return height_; }
-    size_t width() const { return width_; }
-    size_t channels() const { return channels_; }
-    size_t size() const { return height_ * width_ * channels_; }
+    float* const data() const { return data_; };
+    int height() const { return height_; }
+    int width() const { return width_; }
+    int channels() const { return channels_; }
+    int size() const { return height_ * width_ * channels_; }
     
     template<typename ReturnType>
-    ReturnType& at(size_t h, size_t w) const;
+    ReturnType& at(int h, int w) const;
 };
 
 template<typename ReturnType>
-ReturnType& Image::at(size_t i, size_t j) const {
+ReturnType& Image::at(int i, int j) const {
     return *((ReturnType*)(data_ + i * width_ * channels_ + j * channels_));
 }
 

@@ -5,7 +5,7 @@
 
 namespace ccanny {
 
-Image mean_blur(const Image& src, const size_t k);
+Image mean_blur(const Image& src, const int k);
 
 } // namespace ccanny
 

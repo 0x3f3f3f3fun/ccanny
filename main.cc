@@ -3,6 +3,7 @@
 #include <functional>
 #include "image.hpp"
 #include "vector.hpp"
+#include "operator.h"
 
 using namespace std;
 using namespace ccanny;
@@ -34,6 +35,8 @@ void test_vector() {
     Vector<10> v5 = v3 - v2;
     Vector<10> v6 = v3 * v2;
     Vector<10> v7 = v3 / v2;
+    Vector<10> v8(v1); v8 += v8;
+    Vector<10> v9 = v8 / 2.5f;
     cout << "v0 = " << v0 << endl
          << "v1 = " << v1 << endl
          << "v2 = " << v2 << endl
@@ -41,14 +44,31 @@ void test_vector() {
          << "v4 = " << v4 << endl
          << "v5 = " << v5 << endl
          << "v6 = " << v6 << endl
-         << "v7 = " << v7 << endl;
+         << "v7 = " << v7 << endl
+         << "v8 = " << v8 << endl
+         << "v9 = " << v9 << endl;
+}
+
+void test_mean_blur() {
+    const string src = "../data/girl.jpg";
+    Image img = imread(src);
+    cout << "load image from " << src << endl;
+    
+    img.show();
+    Image blurred = mean_blur(img, 15);
+
+    const string dst = "../data/girl_blurred.jpg";
+    if (imwrite(blurred, dst)) {
+        cout << "write blurred image to " << dst << endl;
+    }
 }
 
 typedef function<void()> test_func;
 
 unordered_map<string, test_func> tests = {
     {"read and write", test_read_write},
-    {"vector", test_vector}
+    {"vector", test_vector},
+    {"mean blur", test_mean_blur}
 };
 
 int main() {
