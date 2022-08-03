@@ -6,6 +6,8 @@
 #include "3rd/stb/stb_image_write.h"
 #include <omp.h>
 
+
+
 int main() {
     puts("hello ccanny!");
     return 0;
