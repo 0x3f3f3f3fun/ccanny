@@ -2,3 +2,5 @@ main
 build
 dummy
 a.out
+.vscode
+.gitignore

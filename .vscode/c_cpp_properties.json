@@ -3,13 +3,10 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**",
-                "${workspaceFolder}/include",
-                "/usr/local/include/opencv4"
+                "${workspaceFolder}/**"
             ],
             "defines": [],
-            "compilerPath": "/usr/bin/g++",
-            "cppStandard": "gnu++14",
+            "compilerPath": "/usr/bin/gcc",
             "intelliSenseMode": "linux-gcc-x64"
         }
     ],
