@@ -1,37 +1,97 @@
 #include <stdio.h>
-#include <fcntl.h>
+#include <getopt.h>
+#include <sys/time.h>
+#include <omp.h>
+
 /* stb library */
 #define STB_IMAGE_IMPLEMENTATION
 #include "3rd/stb/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "3rd/stb/stb_image_write.h"
-#include <omp.h>
 
+#define tic(msg) \
+do \
+{ \
+    gettimeofday(&end, NULL); \
+    long cost = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec; \
+    printf("[%s] cost %.3f ms\n", msg, cost / 1000.f); \
+    gettimeofday(&start, NULL); \
+} \
+while (0);
 
-float SOBEL_KERNEL[2][3][3] = {
+/* Below are some global variables */
+float SOBEL_KERNEL_3x3[2][3][3] = {
     {{-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1}},
-    {{1, 2, 1}, {0, 0, 0}, {-1, -2, -1}}
+    {{-1, -2, -1}, {0, 0, 0}, {1, 2, 1}}
 };
 
-float DIR[2] = {-1.f, 1.f};
-int DX[4] = {0, 0, 1, -1}, DY[4] = {1, -1, 0, 0};
+float SOBEL_KERNEL_5x5[2][5][5] = {
+    {
+        {-1, -2, 0, 2, 1},
+        {-4, -8, 0, 8, 4},
+        {-6, -12, 0, 12, 6},
+        {-4, -8, 0, 8, 4},
+        {-1, -2, 0, 2, 1}
+    },
+    {
+        {-1, -4, -6, -4, -1},
+        {-2, -8, -12, -8, -2},
+        {0, 0, 0, 0, 0},
+        {2, 8, 12, 8, 2},
+        {1, 4, 6, 4, 1}
+    }
+};
 
 typedef struct {
     int x, y;
 } coord_t;
 
+/* Simple options parser for this program */
+typedef struct {
+    char path[100];         /* Path to input image */
+    int k_blur;             /* Size of blur kernel */
+    int k_sobel;            /* Size of sobel kernel */
+    int tmin;               /* Low threshold */
+    int tmax;               /* High threshold */
+    int write_internal_res; /* Decide whether to save internal results */
+} options_t;
+
+options_t parse_options(int argc, char *argv[]) {
+    int opt;
+    options_t res = {{'\0'}, 3, 5, 20, 40, 0}; /* Default values */
+
+    while ((opt = getopt(argc, argv, "f:b:s:l:h:i")) != -1) {
+        switch (opt) {
+            case 'f': { strcpy(res.path, optarg); break; }
+            case 'b': { res.k_blur = atoi(optarg); break; }
+            case 's': { res.k_sobel = atoi(optarg); break; }
+            case 'l': { res.tmin = atoi(optarg); break; }
+            case 'h': { res.tmax = atoi(optarg); break; }
+            case 'i': { res.write_internal_res = 1; break; }
+            default: {
+                fprintf(stderr, "Usage: %s [-b] [-s] [-l] [-h] -i \n", argv[0]);
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+
+    return res;
+}
+
+void print_options(options_t opt) {
+    printf("\noptions: \n");
+    printf("---> input                 = %s\n", opt.path);
+    printf("---> blur kernel size      = %d\n", opt.k_blur);
+    printf("---> sobel kernel size     = %d\n", opt.k_sobel);
+    printf("---> min threshold         = %d\n", opt.tmin);
+    printf("---> max threshold         = %d\n", opt.tmax);
+    printf("---> write internal result = %d\n", opt.write_internal_res);
+    printf("\n");
+}
+
 /* Allocate n floats memory. */
 float* float_malloc(int n) {
     return (float*)malloc(sizeof(float) * n);
-}
-
-void print_data(float *data, int n) {
-    for (int i = 0; i < n; i++)
-        if (i)
-            printf(" %.3f", data[i]);
-        else
-            printf("%.3f", data[i]);
-    puts("");
 }
 
 /* Read a R-G-B image from path. */
@@ -57,7 +117,12 @@ void rgb_write(char *path, float *data, int h, int w, int c) {
 
     #pragma omp parallel for
     for (int i = 0; i < n; i++) {
-        buffer[i] = (unsigned char)data[i];
+        if (data[i] < 0.f)
+            buffer[i] = 0;
+        else if (data[i] > 255.f)
+            buffer[i] = 255.f;
+        else
+            buffer[i] = (unsigned char)data[i];
     }
 
     stbi_write_jpg(path, w, h, c, buffer, 0);
@@ -108,43 +173,55 @@ void mean_blur(float *in, float *out, int h, int w, int k) {
 }
 
 /* Commpute gradient of a gray image. */
-void gradient(float *in, float *out_gx, float *out_gy, float *out_mag, int h, int w) {
-    int k = 3; int half_k = k / 2;
+void gradient(float *in, float *out_gx, float *out_gy, float *out_mag, int h, int w, int k) {
+    int half_k = k / 2;
+    float *sobel_kernel = k == 3
+                          ? (float*)SOBEL_KERNEL_3x3
+                          : (float*)SOBEL_KERNEL_5x5;
 
     #pragma omp parallel for
     for (int i = 0; i < h * w; i++) {
         int y = i / w, x = i % w;
         float gx = 0, gy = 0;
+
         // loop for kernel
         for (int dy = -half_k; dy < k - half_k; dy++) {
             for (int dx = -half_k; dx < k - half_k; dx++) {
                 if (!check_image_range(x + dx, y + dy, w, h))
                     continue;
-                gx += *at(in, y + dy, w, x + dx, 1, 0) * SOBEL_KERNEL[0][1 + dy][1 + dx];
-                gy += *at(in, y + dy, w, x + dx, 1, 0) * SOBEL_KERNEL[1][1 + dy][1 + dx];
+                gx += *at(in, y + dy, w, x + dx, 1, 0) * sobel_kernel[(half_k + dy) * k + half_k + dx];
+                gy += *at(in, y + dy, w, x + dx, 1, 0) * sobel_kernel[k * k + (half_k + dy) * k + half_k + dx];
             }
         }
-        if (x == 0 || x == w - 1 || y == 0 || y == h - 1)
+
+        if (x < half_k || x >= w - half_k || y < half_k || y >= h - half_k)
             gx = 0, gy = 0;
         *at(out_gx, y, w, x, 1, 0) = gx, *at(out_gy, y, w, x, 1, 0) = gy;
         *at(out_mag, y, w, x, 1, 0) = sqrtf(powf(gx, 2) + powf(gy, 2));
     }
 }
 
-/* TODO: none max supression is bad */
 void none_max_supression(float *in_gx, float *in_gy, float *in_mag, float *out, int h, int w) {
+    float step[2] = {-1, 1};
+
     #pragma omp parallel for
     for (int i = 0; i < h * w; i++) {
         int y = i / w, x = i % w;
-        // normalize gradient
         float gx = *at(in_gx, y, w, x, 1, 0), gy = *at(in_gy, y, w, x, 1, 0);
         float mag = *at(in_mag, y, w, x, 1, 0);
+
+        if (mag == 0) {
+            *at(out, y, w, x, 1, 0) = 0.f;
+            continue;
+        }
+
+        // normalize gradient
         gx /= mag, gy /= mag;
 
-        // compared with neighbors (not precise)
+        // compared with neighbors along gradient (not precise)
         int is_max = 1;
         for (int t = 0; t < 2; t++) {
-            int nx = x + DIR[t] * gx + 0.5, ny = y + DIR[t] * gy + 0.5;
+            int nx = x + step[t] * gx + 0.5, ny = y + step[t] * gy + 0.5;
             if (check_image_range(nx, ny, w, h) && mag < *at(in_mag, ny, w, nx, 1, 0))
                 is_max = 0;
         }
@@ -156,73 +233,20 @@ void none_max_supression(float *in_gx, float *in_gy, float *in_mag, float *out, 
     }
 }
 
-float find_kth_min(float *data, int l, int r, int k) {
-    if (l == r)
-        return data[l];
-
-    float x = data[(l + r) / 2];
-    int i = l - 1, j = r + 1;
-    while (i < j) {
-        while (data[++i] < x);
-        while (data[--j] > x);
-        if (i < j) {
-            float t = data[i];
-            data[i] = data[j];
-            data[j] = t;
-        }
-    }
-
-    int sl = j - l + 1;
-    if (sl >= k)
-        return find_kth_min(data, l, j, k);
-    else
-        return find_kth_min(data, j + 1, r, k - sl);
-}
-
-void sort(float *data, int l, int r) {
-    if (l >= r)
-        return;
-
-    float x = data[(l + r) / 2];
-    int i = l - 1, j = r + 1;
-    while (i < j) {
-        while (data[++i] < x);
-        while (data[--j] > x);
-        if (i < j) {
-            float t = data[i];
-            data[i] = data[j];
-            data[j] = t;
-        }
-    }
-
-    sort(data, l, j); sort(data, j + 1, r);
-}
-
 void double_threshold(float *in, int h, int w, float tmin, float tmax) {
-    // find boundary
-    // tmin = find_kth_min(in, 0, h * w - 1, tmin * h * w);
-    // tmax = find_kth_min(in, 0, h * w - 1, tmax * h * w);
-    // float *tmp = float_malloc(h * w);
-    // memcpy(tmp, in, sizeof(float) * h * w);
-    // sort(tmp, 0, h * w - 1);
+    int dx[8] = {1, 1, 1, 0, 0, -1, -1, -1},
+        dy[8] = {-1, 0, 1, -1, 1, -1, 0, 1};
 
-    // int nz = -1;
-    // for (int i = 0; i < h * w; i++)
-    //     if (tmp[i] > 0) {
-    //         nz = i; break;
-    //     }
-    // tmin = tmp[nz + (int)((h * w - 1 - nz) * tmin)];
-    // tmax = tmp[nz + (int)((h * w - 1 - nz) * tmax)];
-    // free(tmp);
-
+    // normalize gradient magnitude to [0, 255]
     float max_mag = -1.f;
     for (int i = 0; i < h * w; i++)
         max_mag = max_mag < in[i] ? in[i] : max_mag;
+    
     #pragma omp parallel for
     for (int i = 0; i < h * w; i++)
-        in[i] /= max_mag;
+        in[i] = in[i] / max_mag * 255.f;
 
-    // first stage, clear noise (mag < tmin) and enhance weak edges
+    // enhance weak edges
     coord_t *stk = (coord_t*)malloc(sizeof(coord_t) * h * w);
     char *checked = (char*)malloc(h * w);
     memset(checked, 0, h * w);
@@ -241,11 +265,12 @@ void double_threshold(float *in, int h, int w, float tmin, float tmax) {
                 // fetch top
                 coord_t u = stk[top]; top--;
                 // search for neighbors
-                for (int i = 0; i < 4; i++) {
-                    int nx = u.x + DX[i], ny = u.y + DY[i];
+                for (int i = 0; i < 8; i++) {
+                    int nx = u.x + dx[i], ny = u.y + dy[i];
                     // if this neighbor is weak edge
-                    if (check_image_range(nx, ny, w, h)
-                        && !checked[ny * w + nx] && *at(in, ny, w, nx, 1, 0) >= tmin) {
+                    if (check_image_range(nx, ny, w, h) && !checked[ny * w + nx]
+                        && *at(in, ny, w, nx, 1, 0) >= tmin)
+                    {
                         *at(in, ny, w, nx, 1, 0) = *at(in, u.y, w, u.x, 1, 0);
                         // push to stack
                         top++; stk[top].x = nx, stk[top].y = ny;
@@ -256,7 +281,7 @@ void double_threshold(float *in, int h, int w, float tmin, float tmax) {
         }
     free(stk); free(checked);
     
-    // second stage
+    // binarize
     for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++) {
             float mag = *at(in, y, w, x, 1, 0);
@@ -267,37 +292,49 @@ void double_threshold(float *in, int h, int w, float tmin, float tmax) {
         }
 }
 
-int main() {
-    puts("hello ccanny!");
+int main(int argc, char *argv[]) {
+    printf("hello ccanny!\n");
+    options_t opt = parse_options(argc, argv);
+    print_options(opt);
+
     float *data;
     int h, w, c;
+    rgb_read(opt.path, &data, &h, &w, &c);
+    printf("read image %s, (%d, %d, %d)\n\n", opt.path, h, w, c);
 
-    rgb_read("data/girl.jpg", &data, &h, &w, &c);
-    printf("%s, (%d, %d, %d)\n", "read image data/girl.jpg", h, w, c);
+    struct timeval start, end;
+    gettimeofday(&start, NULL);
+
+    float *gray = float_malloc(h * w), *blurred = float_malloc(h * w),
+          *gx = float_malloc(h * w),   *gy = float_malloc(h * w),
+          *mag = float_malloc(h * w),  *nms_res = float_malloc(h * w);
+    tic("allocate memory")
 
     /* Convert to gray */
-    float *gray = float_malloc(h * w);
     rgb2gray(data, gray, h, w);
-    rgb_write("data/girl_gray.jpg", gray, h, w, 1);
-
     /* Blur input image */
-    float *blurred = float_malloc(h * w);
-    mean_blur(gray, blurred, h, w, 7);
-    rgb_write("data/girl_blurred.jpg", blurred, h, w, 1);
-
+    mean_blur(gray, blurred, h, w, opt.k_blur);
     /* Get gradient magnitude */
-    float *gx = float_malloc(h * w), *gy = float_malloc(h * w), *mag = float_malloc(h * w);
-    gradient(blurred, gx, gy, mag, h, w);
-    rgb_write("data/girl_mag.jpg", mag, h, w, 1);
-
+    gradient(blurred, gx, gy, mag, h, w, opt.k_sobel);
     /* None max supression in magnitude */
-    float *nms_res = float_malloc(h * w);
     none_max_supression(gx, gy, mag, nms_res, h, w);
-    rgb_write("data/girl_nmsed.jpg", nms_res, h, w, 1);
+    tic("preprocess")
+
+    if (opt.write_internal_res) {
+        rgb_write("internal_results/gray.jpg", gray, h, w, 1);
+        rgb_write("internal_results/blurred.jpg", blurred, h, w, 1);
+        rgb_write("internal_results/mag.jpg", mag, h, w, 1);
+        rgb_write("internal_results/gx.jpg", gx, h, w, 1);
+        rgb_write("internal_results/gy.jpg", gy, h, w, 1);
+        rgb_write("internal_results/nmsed.jpg", nms_res, h, w, 1);
+    }
+    tic("write internal result")
 
     /* Double threshold */
-    double_threshold(nms_res, h, w, 0.1, 0.2);
-    rgb_write("data/girl_result.jpg", nms_res, h, w, 1);
+    double_threshold(nms_res, h, w, opt.tmin, opt.tmax);
+    tic("binarize")
+
+    rgb_write("result.jpg", nms_res, h, w, 1);
 
     /* Free data */
     free(data);
@@ -307,5 +344,6 @@ int main() {
     free(gx);
     free(gy);
     free(nms_res);
+
     return 0;
 }

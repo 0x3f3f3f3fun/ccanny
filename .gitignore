@@ -1,6 +1,5 @@
-main
-build
-dummy
 a.out
 .vscode
 .gitignore
+internal_results/*
+result.jpg
