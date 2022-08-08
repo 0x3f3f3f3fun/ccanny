@@ -9,7 +9,11 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "3rd/stb/stb_image_write.h"
 
-#define tic(msg) \
+#define tic \
+struct timeval start, end; \
+gettimeofday(&start, NULL);
+
+#define toc(msg) \
 do \
 { \
     gettimeofday(&end, NULL); \
@@ -42,9 +46,7 @@ float SOBEL_KERNEL_5x5[2][5][5] = {
     }
 };
 
-typedef struct {
-    int x, y;
-} coord_t;
+typedef struct { int x, y; } coord_t;
 
 /* Simple options parser for this program */
 typedef struct {
@@ -147,8 +149,8 @@ void rgb2gray(float *in, float *out, int h, int w) {
         float r = *at(in, y, w, x, 3, 0), g = *at(in, y, w, x, 3, 1),
               b = *at(in, y, w, x, 3, 2);
         // gray = 0.1140 * B  + 0.5870 * G + 0.2989 * R
-        float gray = 0.1140 * b  + 0.5870 * g + 0.2989 * r;
-        *at(out, y, w, x, 1, 0) = gray;
+        float v = 0.1140f * b  + 0.5870f * g + 0.2989f * r;
+        *at(out, y, w, x, 1, 0) = v;
     }
 }
 
@@ -282,14 +284,15 @@ void double_threshold(float *in, int h, int w, float tmin, float tmax) {
     free(stk); free(checked);
     
     // binarize
-    for (int y = 0; y < h; y++)
-        for (int x = 0; x < w; x++) {
-            float mag = *at(in, y, w, x, 1, 0);
-            if (mag > tmax)
-                *at(in, y, w, x, 1, 0) = 255.f;
-            else
-                *at(in, y, w, x, 1, 0) = 0.f;
-        }
+    #pragma omp parallel for
+    for (int i = 0; i < h * w; i++) {
+        int y = i / w, x = i % w;
+        float mag = *at(in, y, w, x, 1, 0);
+        if (mag > tmax)
+            *at(in, y, w, x, 1, 0) = 255.f;
+        else
+            *at(in, y, w, x, 1, 0) = 0.f;
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -302,23 +305,28 @@ int main(int argc, char *argv[]) {
     rgb_read(opt.path, &data, &h, &w, &c);
     printf("read image %s, (%d, %d, %d)\n\n", opt.path, h, w, c);
 
-    struct timeval start, end;
-    gettimeofday(&start, NULL);
+    tic
 
     float *gray = float_malloc(h * w), *blurred = float_malloc(h * w),
           *gx = float_malloc(h * w),   *gy = float_malloc(h * w),
           *mag = float_malloc(h * w),  *nms_res = float_malloc(h * w);
-    tic("allocate memory")
+    toc("allocate memory")
 
     /* Convert to gray */
     rgb2gray(data, gray, h, w);
+    toc("convert to gray")
+
     /* Blur input image */
     mean_blur(gray, blurred, h, w, opt.k_blur);
+    toc("mean blur")
+
     /* Get gradient magnitude */
     gradient(blurred, gx, gy, mag, h, w, opt.k_sobel);
+    toc("compute gradient")
+
     /* None max supression in magnitude */
     none_max_supression(gx, gy, mag, nms_res, h, w);
-    tic("preprocess")
+    toc("none max supression")
 
     if (opt.write_internal_res) {
         rgb_write("internal_results/gray.jpg", gray, h, w, 1);
@@ -328,11 +336,11 @@ int main(int argc, char *argv[]) {
         rgb_write("internal_results/gy.jpg", gy, h, w, 1);
         rgb_write("internal_results/nmsed.jpg", nms_res, h, w, 1);
     }
-    tic("write internal result")
+    toc("write internal result")
 
     /* Double threshold */
     double_threshold(nms_res, h, w, opt.tmin, opt.tmax);
-    tic("binarize")
+    toc("double threshold")
 
     rgb_write("result.jpg", nms_res, h, w, 1);
 
